@@ -1,0 +1,8 @@
+[Unit]
+Description=GPUMonitor data retention prune (delete data older than the window)
+
+[Service]
+Type=oneshot
+User=@USER@
+EnvironmentFile=@BASE@/config.env
+ExecStart=/usr/bin/python3 @BASE@/bin/prune_data.py

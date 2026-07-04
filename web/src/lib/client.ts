@@ -45,9 +45,11 @@ export function useUsage(sel: TimeSelection, host?: string) {
   });
 }
 
-export function useEvents(limit = 50) {
+export function useEvents(limit = 50, sel?: TimeSelection) {
+  // Only a custom range filters events by time; presets show the newest N.
+  const rangeQ = sel && sel.kind === "range" ? `&${timeParams(sel)}` : "";
   return useSWR(
-    `/api/events?limit=${limit}`,
+    `/api/events?limit=${limit}${rangeQ}`,
     (u: string) => fetchValidated(u, EventsResponse),
     { refreshInterval: 15_000 },
   );

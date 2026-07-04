@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { Check } from "lucide-react";
-import { useUsage, type TimeSelection } from "@/lib/client";
+import { useUsage, useOverview, type TimeSelection } from "@/lib/client";
 import { type Bucket } from "@/lib/contract";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, tzLabel } from "@/lib/utils";
@@ -49,6 +49,7 @@ export function AccumulatedUsage() {
   const [hostSel, setHostSel] = useState<Set<string>>(new Set());
   const [gpuSel, setGpuSel] = useState<Set<string>>(new Set());
   const { data, isLoading } = useUsage(time);
+  const earliest = useOverview().data?.earliest ?? null;
 
   const series = data?.series ?? [];
   const cluster = series.find((s) => s.scope === "cluster");
@@ -86,7 +87,12 @@ export function AccumulatedUsage() {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Accumulated usage · per GPU</h2>
-        <TimeRangeControls value={time} onChange={setTime} presetLabels={BUCKET_LABELS} />
+        <TimeRangeControls
+          value={time}
+          onChange={setTime}
+          presetLabels={BUCKET_LABELS}
+          earliest={earliest}
+        />
       </div>
 
       {cluster && (

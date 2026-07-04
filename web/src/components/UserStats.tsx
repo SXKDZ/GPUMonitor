@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { useUsers, type TimeSelection } from "@/lib/client";
+import { useUsers, useOverview, type TimeSelection } from "@/lib/client";
 import { type Bucket, type UserUsage } from "@/lib/contract";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -97,6 +97,7 @@ function UserRow({ u, maxGpuHours }: { u: UserUsage; maxGpuHours: number }) {
 export function UserStats() {
   const [time, setTime] = useState<TimeSelection>({ kind: "preset", bucket: "weekly" });
   const { data, isLoading } = useUsers(time);
+  const earliest = useOverview().data?.earliest ?? null;
   const users = data?.users ?? [];
   const maxGpuHours = Math.max(1, ...users.map((u) => u.gpu_hours));
 
@@ -104,7 +105,12 @@ export function UserStats() {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Per-user usage</h2>
-        <TimeRangeControls value={time} onChange={setTime} presetLabels={BUCKET_LABELS} />
+        <TimeRangeControls
+          value={time}
+          onChange={setTime}
+          presetLabels={BUCKET_LABELS}
+          earliest={earliest}
+        />
       </div>
 
       <Card>

@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
-import { readAllStatus, nowSec, STALE_AFTER_S } from "@/lib/data";
+import { readAllStatus, earliestDataSec, nowSec, STALE_AFTER_S } from "@/lib/data";
 import { OverviewResponse } from "@/lib/contract";
 
 export const dynamic = "force-dynamic"; // always read fresh NFS state
 
 export async function GET() {
-  const hosts = await readAllStatus();
+  const [hosts, earliest] = await Promise.all([
+    readAllStatus(),
+    earliestDataSec(),
+  ]);
   const now = nowSec();
   const stale = hosts
     .filter((h) => now - h.ts > STALE_AFTER_S)
@@ -15,6 +18,7 @@ export async function GET() {
     hosts,
     stale,
     staleAfterS: STALE_AFTER_S,
+    earliest,
   });
   return NextResponse.json(body);
 }

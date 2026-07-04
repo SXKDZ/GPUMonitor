@@ -4,8 +4,10 @@
 #   ctl.sh install-guard         (sudo) install+start GPUGuard (root killer) on THIS host
 #   ctl.sh install-dashboard     (sudo) install+start dashboard on THIS host
 #   ctl.sh install-all           (sudo) monitor + guard on THIS host
+#   ctl.sh install-prune         (sudo) install daily data-retention timer
 #   ctl.sh enforce on|off        flip kill-enforcement for ALL hosts (edits config.json)
 #   ctl.sh protect <user>...     add users the guard must never kill
+#   ctl.sh prune [--dry-run]     prune data older than the retention window now
 #   ctl.sh status                show per-host live summary
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,7 +19,9 @@ case "${1:-}" in
   install-monitor)   sudo "$REPO/install.sh" monitor ;;
   install-guard)     sudo "$REPO/install.sh" guard ;;
   install-dashboard) sudo "$REPO/install.sh" dashboard ;;
+  install-prune)     sudo "$REPO/install.sh" prune ;;
   install-all)       sudo "$REPO/install.sh" monitor guard ;;
+  prune)             shift; python3 "$REPO/bin/prune_data.py" "$@" ;;
   enforce)
     val=false; [[ "${2:-}" == "on" ]] && val=true
     python3 - "$CFG" "$val" <<'PY'

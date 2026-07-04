@@ -68,6 +68,14 @@ for comp in "$@"; do
       test -d "$BASE/web/.next" || { echo "dashboard not built: run 'npm --prefix $BASE/web ci && npm --prefix $BASE/web run build'"; exit 1; }
       install_unit dashboard gpu-dashboard.service
       echo "Dashboard at http://$(hostname -f):$PORT" ;;
-    *) echo "unknown component: $comp (use monitor|guard|dashboard)"; exit 1 ;;
+    prune)
+      test -f "$BASE/bin/prune_data.py" || { echo "missing $BASE/bin/prune_data.py"; exit 1; }
+      render "$REPO/systemd/gpu-prune.service.in" /etc/systemd/system/gpu-prune.service
+      render "$REPO/systemd/gpu-prune.timer.in" /etc/systemd/system/gpu-prune.timer
+      systemctl daemon-reload
+      systemctl enable --now gpu-prune.timer
+      systemctl --no-pager list-timers gpu-prune.timer | head -3 || true
+      echo "prune timer installed (retention ${GPUGUARD_RETENTION_DAYS:-30}d, runs daily)." ;;
+    *) echo "unknown component: $comp (use monitor|guard|dashboard|prune)"; exit 1 ;;
   esac
 done

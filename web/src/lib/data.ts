@@ -83,6 +83,44 @@ export async function readAllStatus(): Promise<LiveStatus[]> {
 }
 
 /**
+ * Earliest timestamp (epoch seconds) for which any usage data exists, or null
+ * if there's none yet. Cheap: month files are named YYYY-MM.jsonl, so the
+ * oldest month sorts first; we read only its first line per host.
+ */
+export async function earliestDataSec(): Promise<number | null> {
+  const hosts = await listFiles(ROLLUP_DIR);
+  let earliest: number | null = null;
+  await Promise.all(
+    hosts.map(async (host) => {
+      const hostDir = path.join(ROLLUP_DIR, host);
+      const months = (await listFiles(hostDir))
+        .filter((f) => /^\d{4}-\d{2}\.jsonl$/.test(f))
+        .sort();
+      let hour: number | null = null;
+      if (months.length) {
+        const raw = await readFileT(path.join(hostDir, months[0]));
+        const first = raw?.split("\n").find((l) => l.trim());
+        if (first) {
+          try {
+            hour = HourlyRecord.parse(JSON.parse(first)).hour;
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      // fall back to the in-progress hour if no month file yet
+      if (hour == null) {
+        for (const rec of await readCurrentHour(host)) {
+          hour = hour == null ? rec.hour : Math.min(hour, rec.hour);
+        }
+      }
+      if (hour != null && (earliest == null || hour < earliest)) earliest = hour;
+    }),
+  );
+  return earliest;
+}
+
+/**
  * Read hourly rollup records across all hosts within [fromSec, toSec].
  * Only opens month files that can overlap the range -- keeps IO bounded.
  */
@@ -286,10 +324,12 @@ export function buildUserUsage(records: UserHourly[]): UserUsage[] {
 
 /** Most recent kill/would-kill events across all hosts, newest first.
  * Returns the newest `limit` events plus the total available (for "load more").
- * We parse only the tail of each host's log (bounded by `limit`) but count all
- * lines so the total is accurate without parsing everything. */
+ * Without a range we parse only each host's tail (bounded by `limit`) for
+ * speed; with a from/to range we scan and filter by ts. `total` reflects the
+ * number of events matching the range (or all events when unranged). */
 export async function readEvents(
   limit = 50,
+  range?: { from: number; to: number },
 ): Promise<{ events: KillEvent[]; total: number }> {
   const files = (await listFiles(EVENTS_DIR)).filter((f) => f.endsWith(".jsonl"));
   const events: KillEvent[] = [];
@@ -299,13 +339,29 @@ export async function readEvents(
       const raw = await readFileT(path.join(EVENTS_DIR, f));
       if (raw === null) return;
       const lines = raw.split("\n").filter((l) => l.trim());
-      total += lines.length;
-      for (const line of lines.slice(-limit)) {
-        try {
-          const ev = KillEvent.safeParse(JSON.parse(line));
-          if (ev.success) events.push(ev.data);
-        } catch {
-          /* skip */
+      if (!range) {
+        // fast path: unfiltered, only the tail can be among the newest
+        total += lines.length;
+        for (const line of lines.slice(-limit)) {
+          try {
+            const ev = KillEvent.safeParse(JSON.parse(line));
+            if (ev.success) events.push(ev.data);
+          } catch {
+            /* skip */
+          }
+        }
+      } else {
+        // ranged: must scan every line and filter by ts
+        for (const line of lines) {
+          try {
+            const ev = KillEvent.safeParse(JSON.parse(line));
+            if (ev.success && ev.data.ts >= range.from && ev.data.ts <= range.to) {
+              total++;
+              events.push(ev.data);
+            }
+          } catch {
+            /* skip */
+          }
         }
       }
     }),

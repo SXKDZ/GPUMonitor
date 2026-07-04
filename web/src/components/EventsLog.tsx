@@ -1,33 +1,58 @@
 "use client";
 import { useState } from "react";
-import { useEvents } from "@/lib/client";
+import { useEvents, useOverview, type TimeSelection } from "@/lib/client";
+import { type Bucket } from "@/lib/contract";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { fmtBytesMiB } from "@/lib/utils";
+import { TimeRangeControls } from "@/components/TimeRangeControls";
 
 const PAGE = 50;
 
+// For events the presets just mean "newest N"; only a custom range filters by
+// time, so give the presets event-count labels.
+const BUCKET_LABELS: Record<Bucket, string> = {
+  hourly: "Latest",
+  weekly: "Latest",
+  biweekly: "Latest",
+  monthly: "Latest",
+};
+
 export function EventsLog() {
+  const [time, setTime] = useState<TimeSelection>({ kind: "preset", bucket: "hourly" });
   const [limit, setLimit] = useState(PAGE);
-  const { data } = useEvents(limit);
+  const { data } = useEvents(limit, time);
+  const earliest = useOverview().data?.earliest ?? null;
   const events = data?.events ?? [];
   const total = data?.total ?? 0;
   const hasMore = events.length < total;
+  const ranged = time.kind === "range";
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between">
-        <CardTitle className="text-base">Guard actions</CardTitle>
-        {total > 0 && (
-          <span className="text-xs text-muted-foreground">
-            showing {events.length} of {total}
-          </span>
-        )}
+      <CardHeader className="flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <CardTitle className="flex items-center gap-3 text-base">
+          Guard actions
+          {total > 0 && (
+            <span className="text-xs font-normal text-muted-foreground">
+              showing {events.length} of {total}
+              {ranged ? " in range" : ""}
+            </span>
+          )}
+        </CardTitle>
+        <TimeRangeControls
+          value={time}
+          onChange={setTime}
+          presetLabels={BUCKET_LABELS}
+          earliest={earliest}
+        />
       </CardHeader>
       <CardContent>
         {events.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No kills or would-kills recorded yet.
+            {ranged
+              ? "No kills or would-kills in this range."
+              : "No kills or would-kills recorded yet."}
           </p>
         ) : (
           <>

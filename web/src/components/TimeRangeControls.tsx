@@ -22,10 +22,12 @@ const selectCls =
 function DateTime12({
   epoch,
   max,
+  min,
   onChange,
 }: {
   epoch: number;
   max: number;
+  min?: number;
   onChange: (epoch: number) => void;
 }) {
   const c = toClockParts(epoch);
@@ -34,12 +36,14 @@ function DateTime12({
     if (e != null) onChange(e);
   };
   const maxDate = toClockParts(max).date;
+  const minDate = min != null ? toClockParts(min).date : undefined;
   return (
     <span className="inline-flex items-center gap-1">
       <input
         type="date"
         value={c.date}
         max={maxDate}
+        min={minDate}
         onChange={(e) => commit({ date: e.target.value })}
         className={selectCls}
       />
@@ -88,13 +92,19 @@ export function TimeRangeControls({
   value,
   onChange,
   presetLabels,
+  earliest,
 }: {
   value: TimeSelection;
   onChange: (sel: TimeSelection) => void;
   presetLabels: Record<Bucket, string>;
+  earliest?: number | null; // epoch secs of oldest data; clamps the pickers
 }) {
   const now = nowSecClient();
-  const from = value.kind === "range" ? value.from : now - 7 * 86400;
+  // Default a custom "from" to the later of 7 days ago and the first data
+  // point, so the picker never implies data older than what exists.
+  const floor = earliest ?? 0;
+  const defaultFrom = Math.max(floor, now - 7 * 86400);
+  const from = value.kind === "range" ? value.from : defaultFrom;
   const to = value.kind === "range" ? value.to : now;
 
   return (
@@ -118,6 +128,7 @@ export function TimeRangeControls({
         </span>
         <DateTime12
           epoch={from}
+          min={floor || undefined}
           max={to}
           onChange={(f) => onChange({ kind: "range", from: f, to })}
         />
@@ -126,6 +137,7 @@ export function TimeRangeControls({
         </span>
         <DateTime12
           epoch={to}
+          min={floor || undefined}
           max={now}
           onChange={(t) => onChange({ kind: "range", from, to: t })}
         />

@@ -126,6 +126,7 @@ export const OverviewResponse = z.object({
   hosts: z.array(LiveStatus),
   stale: z.array(z.string()), // hosts whose status is older than staleAfterS
   staleAfterS: z.number(),
+  earliest: z.number().nullable(), // epoch secs of oldest data, or null if none
 });
 export type OverviewResponse = z.infer<typeof OverviewResponse>;
 

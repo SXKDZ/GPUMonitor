@@ -1,4 +1,5 @@
 "use client";
+import { Github } from "lucide-react";
 import { useOverview } from "@/lib/client";
 import { HostGrid } from "@/components/HostGrid";
 import { AccumulatedUsage } from "@/components/AccumulatedUsage";
@@ -84,14 +85,22 @@ export default function Page() {
 
       <UserStats />
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Guard actions</h2>
-        <EventsLog />
-      </section>
+      <EventsLog />
 
-      <footer className="pt-4 text-center text-xs text-muted-foreground">
-        GPU guard · samples every 10s · kills a GPU&apos;s procs when &gt;75% of a
-        5-min window is idle (util ≤5%)
+      <footer className="flex flex-col items-center gap-2 pt-4 text-center text-xs text-muted-foreground">
+        <span>
+          GPUMonitor · samples every 10s · flags a GPU when &gt;75% of a 5-min
+          window is idle (util ≤5%)
+        </span>
+        <a
+          href="https://github.com/SXKDZ/GPUMonitor"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
+        >
+          <Github className="h-4 w-4" />
+          SXKDZ/GPUMonitor
+        </a>
       </footer>
     </main>
   );
