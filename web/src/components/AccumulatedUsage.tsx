@@ -1,9 +1,10 @@
 "use client";
 import { useMemo, useState } from "react";
+import { Check } from "lucide-react";
 import { useUsage, type TimeSelection } from "@/lib/client";
 import { type Bucket } from "@/lib/contract";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { cn, tzLabel } from "@/lib/utils";
 import { UsageChart } from "@/components/UsageChart";
 import { TimeRangeControls } from "@/components/TimeRangeControls";
 
@@ -30,12 +31,13 @@ function PillToggle({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+        "inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
         active
           ? "border-primary/50 bg-primary/15 text-primary"
           : "border-border bg-muted/40 text-muted-foreground hover:text-foreground",
       )}
     >
+      {active && <Check className="h-3 w-3" />}
       {children}
     </button>
   );
@@ -91,7 +93,10 @@ export function AccumulatedUsage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              Whole cluster · utilization &amp; memory
+              Whole cluster · utilization &amp; memory{" "}
+              <span className="font-normal text-muted-foreground">
+                (times in {tzLabel()})
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent>

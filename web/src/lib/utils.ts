@@ -30,34 +30,84 @@ export function fmtAge(sec: number): string {
   return `${Math.round(sec / 86400)}d ago`;
 }
 
+/**
+ * Timezone all times are displayed in. Set NEXT_PUBLIC_TZ (an IANA name such
+ * as "America/Los_Angeles") to pin the dashboard to the cluster's timezone;
+ * leave it unset to use each viewer's own browser timezone. Pinning avoids the
+ * confusion of the same UTC bucket reading as a different clock time depending
+ * on where the viewer sits.
+ */
+export const DISPLAY_TZ: string | undefined =
+  process.env.NEXT_PUBLIC_TZ || undefined;
+
+/** Short label for the active display timezone, e.g. "PDT" or "local". */
+export function tzLabel(): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: DISPLAY_TZ,
+      timeZoneName: "short",
+    }).formatToParts(new Date());
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? "local";
+  } catch {
+    return "local";
+  }
+}
+
 /** Format a bucket-start epoch (seconds) for an axis tick, given the
  * granularity ("hourly" | "daily" | "weekly" | "monthly"). */
 export function fmtBucketTick(t: number, granularity: string): string {
   const d = new Date(t * 1000);
+  const tz = DISPLAY_TZ;
   if (granularity === "hourly") {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: tz });
   }
   if (granularity === "monthly") {
-    return d.toLocaleDateString([], { month: "short", year: "2-digit" });
+    return d.toLocaleDateString([], { month: "short", year: "2-digit", timeZone: tz });
   }
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  return d.toLocaleDateString([], { month: "short", day: "numeric", timeZone: tz });
 }
 
-/** YYYY-MM-DD (local) for <input type="date"> values. */
-export function toDateInput(epochSec: number): string {
-  const d = new Date(epochSec * 1000);
+/** Wall-clock fields of an instant, evaluated in the display timezone. */
+function partsInTz(epochSec: number) {
+  const dtf = new Intl.DateTimeFormat("en-CA", {
+    timeZone: DISPLAY_TZ,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const p = Object.fromEntries(
+    dtf.formatToParts(new Date(epochSec * 1000)).map((x) => [x.type, x.value]),
+  );
+  // "24" hour can appear at midnight in some engines; normalize to "00".
+  const hh = p.hour === "24" ? "00" : p.hour;
+  return { y: +p.year, mo: +p.month, d: +p.day, h: +hh, mi: +p.minute };
+}
+
+/** Offset (seconds) of the display tz at a given instant: local - UTC. */
+function tzOffsetSec(epochSec: number): number {
+  const f = partsInTz(epochSec);
+  const asUtc = Date.UTC(f.y, f.mo - 1, f.d, f.h, f.mi) / 1000;
+  return asUtc - Math.floor(epochSec / 60) * 60;
+}
+
+/** "YYYY-MM-DDTHH:MM" in the display tz, for <input type="datetime-local">. */
+export function toDateTimeInput(epochSec: number): string {
+  const f = partsInTz(epochSec);
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${f.y}-${p(f.mo)}-${p(f.d)}T${p(f.h)}:${p(f.mi)}`;
 }
 
-/** Parse a YYYY-MM-DD date input into epoch seconds at local midnight;
- * endOfDay=true snaps to 23:59:59 of that day. */
-export function fromDateInput(value: string, endOfDay = false): number | null {
+/** Parse "YYYY-MM-DDTHH:MM" (wall-clock in the display tz) into epoch seconds. */
+export function fromDateTimeInput(value: string): number | null {
   if (!value) return null;
-  const [y, m, d] = value.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  const dt = endOfDay
-    ? new Date(y, m - 1, d, 23, 59, 59)
-    : new Date(y, m - 1, d, 0, 0, 0);
-  return Math.floor(dt.getTime() / 1000);
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m.map(Number);
+  // Interpret the fields as UTC, then correct by the tz offset at that instant.
+  const asUtc = Date.UTC(y, mo - 1, d, h, mi) / 1000;
+  const off = tzOffsetSec(asUtc);
+  return Math.floor(asUtc - off);
 }
