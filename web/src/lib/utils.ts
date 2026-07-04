@@ -93,25 +93,6 @@ function tzOffsetSec(epochSec: number): number {
   return asUtc - Math.floor(epochSec / 60) * 60;
 }
 
-/** "YYYY-MM-DDTHH:MM" in the display tz, for <input type="datetime-local">. */
-export function toDateTimeInput(epochSec: number): string {
-  const f = partsInTz(epochSec);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${f.y}-${p(f.mo)}-${p(f.d)}T${p(f.h)}:${p(f.mi)}`;
-}
-
-/** Parse "YYYY-MM-DDTHH:MM" (wall-clock in the display tz) into epoch seconds. */
-export function fromDateTimeInput(value: string): number | null {
-  if (!value) return null;
-  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-  if (!m) return null;
-  const [, y, mo, d, h, mi] = m.map(Number);
-  // Interpret the fields as UTC, then correct by the tz offset at that instant.
-  const asUtc = Date.UTC(y, mo - 1, d, h, mi) / 1000;
-  const off = tzOffsetSec(asUtc);
-  return Math.floor(asUtc - off);
-}
-
 /** Reassemble wall-clock fields (in the display tz) into epoch seconds. */
 function composeEpoch(date: string, hour24: number, minute: number): number | null {
   const m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);

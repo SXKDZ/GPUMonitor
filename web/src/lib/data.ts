@@ -261,6 +261,9 @@ async function readCurrentUsers(host: string): Promise<UserHourly[]> {
   for (const u of data.users as Record<string, number & string>[]) {
     const gs = Number(u.gpu_samples) || 0;
     if (gs <= 0) continue;
+    // Divide util by samples that had a reading (matches the finalized record);
+    // older checkpoints without util_samples fall back to gpu_samples.
+    const us = Number(u.util_samples) || gs;
     const rec = UserHourly.safeParse({
       v: 1,
       host,
@@ -268,7 +271,7 @@ async function readCurrentUsers(host: string): Promise<UserHourly[]> {
       user: String(u.user),
       gpu_samples: gs,
       gpu_hours: round((gs * SAMPLE_INTERVAL_S) / 3600, 4),
-      util_mean: round(Number(u.util_sum) / gs, 2),
+      util_mean: round(Number(u.util_sum) / us, 2),
       mem_gib_hours: round((Number(u.mem_sum) * SAMPLE_INTERVAL_S) / 3600 / 1024, 4),
       mem_used_max_mib: Number(u.mem_max) || 0,
     });

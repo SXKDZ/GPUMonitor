@@ -14,11 +14,17 @@ it only logs `would-kill` until `enforce: true` is set in config.json.
 
 import json
 import os
+import pwd
 import signal
 import sys
 import time
 
 BASE = os.environ.get("GPUGUARD_BASE", "/opt/gpumonitor")
+
+# Users the guard must NEVER kill, regardless of config.json. root and all
+# system accounts (uid < 1000) are always protected -- a config with an empty
+# protected_users list cannot expose them.
+SYSTEM_UID_MAX = 1000
 HOST = os.environ.get("GPUGUARD_HOST") or os.uname().nodename.split(".")[0]
 
 POLL_INTERVAL = float(os.environ.get("GPUGUARD_POLL", "5"))       # seconds
@@ -79,6 +85,32 @@ def append_jsonl(path, obj):
         f.write(json.dumps(obj) + "\n")
 
 
+def live_owner(pid):
+    """(uid, username) of the process currently holding `pid`, read live from
+    /proc -- NOT trusted from the status file. Returns (None, None) if gone.
+    This is the authoritative owner for the kill decision, so a status file
+    that mislabels a PID's user cannot steer root into killing the wrong
+    process."""
+    try:
+        uid = os.stat(f"/proc/{pid}").st_uid
+    except Exception:
+        return None, None
+    try:
+        return uid, pwd.getpwuid(uid).pw_name
+    except KeyError:
+        return uid, str(uid)
+
+
+def is_protected(uid, name, cfg):
+    """A PID is protected if its LIVE owner is root/system (uid < 1000) or in
+    the configured protected_users. Never trusts the status file's user string."""
+    if uid is None:
+        return True  # can't verify owner -> refuse to kill
+    if uid < SYSTEM_UID_MAX:
+        return True
+    return name in cfg["protected_users"]
+
+
 def do_kill(pid):
     """SIGTERM, wait TERM_GRACE, then SIGKILL. Returns outcome string."""
     try:
@@ -107,27 +139,39 @@ def handle_gpu(gpu, cfg):
     """Act on one flagged GPU. Returns list of event dicts written."""
     events = []
     for p in gpu.get("procs", []):
-        user = p.get("user", "?")
         pid = p.get("pid")
-        if pid is None:
+        # Only signal real, user-space PIDs. Reject non-int, <=1 (0 signals the
+        # whole process group, -1 signals every process, 1 is init) so a crafted
+        # status file can't turn one GPU into a system-wide kill.
+        if not isinstance(pid, bool) and isinstance(pid, int) and pid > 1:
+            pass
+        else:
+            log(f"gpu{gpu['index']}: skip invalid pid {pid!r}")
             continue
-        if user in cfg["protected_users"]:
-            log(f"gpu{gpu['index']}: skip protected user {user} pid {pid}")
+
+        # Resolve the owner LIVE from /proc, not from the (untrusted) status
+        # file, and protect root/system + configured users.
+        uid, owner = live_owner(pid)
+        if owner is None:
+            continue  # process already gone
+        if is_protected(uid, owner, cfg):
+            log(f"gpu{gpu['index']}: skip protected {owner} pid {pid}")
             continue
+
         ev = {
             "ts": time.time(), "host": HOST, "gpu": gpu["index"],
-            "uuid": gpu.get("uuid", "?"), "pid": pid, "user": user,
+            "uuid": gpu.get("uuid", "?"), "pid": pid, "user": owner,
             "name": p.get("name", "?"), "mem_mib": p.get("mem_mib", 0),
             "enforce": cfg["enforce"], "action": None,
         }
         if not cfg["enforce"]:
             ev["action"] = "would-kill"
             log(f"DRY-RUN would kill gpu{gpu['index']} pid {pid} "
-                f"({user}/{p.get('name','?')}, {p.get('mem_mib',0)} MiB)")
+                f"({owner}/{p.get('name','?')}, {p.get('mem_mib',0)} MiB)")
         else:
             ev["action"] = do_kill(pid)
             log(f"KILLED gpu{gpu['index']} pid {pid} "
-                f"({user}/{p.get('name','?')}): {ev['action']}")
+                f"({owner}/{p.get('name','?')}): {ev['action']}")
         events.append(ev)
     return events
 

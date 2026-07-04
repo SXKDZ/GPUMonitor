@@ -5,6 +5,7 @@
 #   sudo ./install.sh monitor      # GPUMonitor (sampling + stats + dashboard data)
 #   sudo ./install.sh guard        # GPUGuard   (root killer; dry-run until enforced)
 #   sudo ./install.sh dashboard    # web dashboard (run on one host)
+#   sudo ./install.sh prune        # daily data-retention timer
 #   sudo ./install.sh monitor guard # several at once
 #
 # All values come from ./config.env (copy from config.env.example first).

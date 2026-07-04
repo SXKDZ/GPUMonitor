@@ -237,6 +237,10 @@ class Rollup:
             self.hour = h
             self.acc = {}
             self.users = {}
+            # Durably record the reset BEFORE accumulating the new hour, so a
+            # crash mid-hour can't make resume re-finalize (double-count) the
+            # already-flushed previous hour.
+            self._checkpoint()
         for g in gpus:
             a = self.acc.get(g["uuid"])
             if a is None:
@@ -271,12 +275,13 @@ class Rollup:
             for user, umem in mem_by_user.items():
                 ua = self.users.get(user)
                 if ua is None:
-                    ua = {"user": user, "gpu_samples": 0, "util_sum": 0.0,
-                          "mem_sum": 0.0, "mem_max": 0}
+                    ua = {"user": user, "gpu_samples": 0, "util_samples": 0,
+                          "util_sum": 0.0, "mem_sum": 0.0, "mem_max": 0}
                     self.users[user] = ua
                 ua["gpu_samples"] += 1  # one (gpu, sample) of occupancy
                 if u is not None:
                     ua["util_sum"] += u
+                    ua["util_samples"] += 1  # denominator for util_mean
                 ua["mem_sum"] += umem
                 ua["mem_max"] = max(ua["mem_max"], umem)
         self._checkpoint()
@@ -300,7 +305,10 @@ class Rollup:
         }
 
     def _user_record(self, ua):
-        gs = ua["gpu_samples"] or 1
+        # Divide util by the number of samples that actually had a util reading
+        # (N/A samples are excluded), matching the per-GPU record. Older
+        # checkpoints may lack util_samples; fall back to gpu_samples.
+        us = ua.get("util_samples", ua["gpu_samples"]) or 1
         gpu_hours = ua["gpu_samples"] * SAMPLE_INTERVAL / 3600.0
         mem_gib_hours = ua["mem_sum"] * SAMPLE_INTERVAL / 3600.0 / 1024.0
         return {
@@ -308,7 +316,7 @@ class Rollup:
             "user": ua["user"],
             "gpu_samples": ua["gpu_samples"],
             "gpu_hours": round(gpu_hours, 4),
-            "util_mean": round(ua["util_sum"] / gs, 2),
+            "util_mean": round(ua["util_sum"] / us, 2),
             "mem_gib_hours": round(mem_gib_hours, 4),
             "mem_used_max_mib": ua["mem_max"],
         }

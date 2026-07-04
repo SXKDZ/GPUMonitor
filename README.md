@@ -4,8 +4,10 @@ Lightweight, dependency-free GPU monitoring for a shared multi-host cluster,
 plus an optional idle-guard that reclaims stalled GPUs.
 
 - **GPUMonitor** — samples per-GPU utilization + memory on each host, publishes
-  live status and hourly/weekly/biweekly/monthly rollups (per GPU **and** per
-  user), and flags GPUs that have gone idle-but-occupied. Runs unprivileged.
+  live status and **hourly** rollups (per GPU **and** per user), and flags GPUs
+  that have gone idle-but-occupied. The dashboard aggregates those hourly
+  records into weekly/biweekly/monthly (or any custom range) on read. Runs
+  unprivileged.
 - **GPUGuard** *(optional)* — a tiny root service that reads what the monitor
   flagged and kills the stalled processes. Ships in **dry-run**; it only logs
   `would-kill` until you explicitly enable enforcement.
@@ -26,10 +28,12 @@ plus an optional idle-guard that reclaims stalled GPUs.
 
 For each GPU the monitor keeps a rolling window (default **5 min**). If **>75 %**
 of the samples in that window are **idle** (utilization **≤5 %**) *and* a compute
-process is holding the GPU, the GPU is flagged `kill_candidate`. The window
-resets whenever the set of processes changes, so a freshly started job always
-gets a fresh window. GPUGuard (if installed and enforcing) then SIGTERMs, waits
-a grace period, and SIGKILLs the holdouts. All thresholds are configurable.
+process is holding the GPU, the GPU is flagged `kill_candidate` — but only once
+the window is actually full (a ~95 % span guard), so a freshly started or just
+-reset window never flags prematurely. The window resets whenever the set of
+processes changes, so a freshly started job always gets a fresh window. GPUGuard
+(if installed and enforcing) then SIGTERMs, waits a grace period, and SIGKILLs
+the holdouts. All thresholds are configurable.
 
 ## Architecture
 
@@ -76,8 +80,15 @@ cp config.env.example config.env
 | `GPUGUARD_IDLE_FRACTION` | `0.75` | idle-sample fraction that flags a GPU |
 | `GPUGUARD_TERM_GRACE` | `15` | seconds between SIGTERM and SIGKILL (guard) |
 | `GPUGUARD_POLL` | `5` | seconds between guard status-file polls |
-| `GPUGUARD_PORT` | `8090` | dashboard port |
+| `GPUGUARD_STATUS_MAX_AGE` | `60` | guard ignores a status file older than this (s) |
+| `GPUGUARD_RETENTION_DAYS` | `30` | prune deletes rollups/events older than this |
+| `GPUGUARD_PORT` | `8090` | dashboard port (shell/systemd only; not read by web code) |
 | `GPUGUARD_NODE_BIN` | *(auto)* | node bin dir for the dashboard unit |
+| `GPUGUARD_HOST` | *(hostname)* | override the host label in filenames/status |
+
+Build-time only (inlined by Next.js — set before `npm run build`, not via the
+systemd runtime env): `NEXT_PUBLIC_TITLE` (dashboard heading) and
+`NEXT_PUBLIC_TZ` (display timezone for charts/pickers).
 
 Runtime kill policy lives in `$GPUGUARD_BASE/config.json`
 (`enforce`, `protected_users`) and is editable live via `./ctl.sh`.
@@ -98,7 +109,12 @@ npm --prefix web ci && npm --prefix web run build
 sudo ./install.sh monitor              # GPUMonitor  (every GPU host)
 sudo ./install.sh dashboard            # dashboard   (one host)
 sudo ./install.sh guard                # GPUGuard    (optional; dry-run until enabled)
+sudo ./install.sh prune                # daily data-retention timer (optional)
 ```
+
+To set a custom dashboard title or timezone, export the `NEXT_PUBLIC_*` vars
+into the build environment *before* building (e.g. put them in `web/.env.local`),
+since Next.js inlines them at build time.
 
 No systemd / no root? Run the agents in the foreground for a quick try:
 
@@ -113,12 +129,20 @@ No systemd / no root? Run the agents in the foreground for a quick try:
 ./ctl.sh status            # per-host live summary
 ./ctl.sh enforce on|off    # flip GPUGuard enforcement for ALL hosts
 ./ctl.sh protect alice bob # never kill these users' processes
-sudo ./ctl.sh install-monitor|install-guard|install-dashboard|install-all
-sudo ./uninstall.sh [monitor|guard|dashboard]
+./ctl.sh prune [--dry-run] # delete data older than the retention window now
+sudo ./ctl.sh install-monitor|install-guard|install-dashboard|install-prune|install-all
+sudo ./uninstall.sh [monitor|guard|dashboard|prune]
 ```
 
 Enforcement is **central**: `ctl.sh enforce on` edits `config.json` once and
 every guard picks it up within one poll cycle. Guards start in **dry-run**.
+
+**Data retention.** Rollups and event logs accumulate over time. `prune_data.py`
+deletes finalized monthly rollups whose whole month is older than
+`GPUGUARD_RETENTION_DAYS` (default 30) and trims events older than the cutoff;
+the in-progress hour and live status are never touched. Run it manually
+(`./ctl.sh prune`, add `--dry-run` to preview) or install the daily timer
+(`sudo ./install.sh prune`).
 
 ## Dashboard
 

@@ -15,6 +15,18 @@ Restart=always
 RestartSec=5
 # The killer must never be OOM-reaped before the jobs it polices.
 OOMScoreAdjust=-500
+# Hardening: the guard needs root + kill(2) on other users' procs, but nothing
+# else. Shrink the blast radius of any compromise. (It must NOT set NoNewPrivileges
+# or restrict SIGKILL to other users, so leave PID capabilities intact.)
+ProtectSystem=strict
+ReadWritePaths=@BASE@/data
+ProtectHome=read-only
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
 StandardOutput=journal
 StandardError=journal
 

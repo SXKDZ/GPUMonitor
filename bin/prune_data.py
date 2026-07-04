@@ -90,6 +90,8 @@ def trim_events(cutoff, dry):
             tmp = f"{f}.tmp.{os.getpid()}"
             with open(tmp, "w") as out:
                 out.write("\n".join(kept) + ("\n" if kept else ""))
+                out.flush()
+                os.fsync(out.fileno())  # durable before the atomic rename
             os.replace(tmp, f)
             log(f"trimmed {dropped} old events from {os.path.basename(f)}")
     return trimmed
