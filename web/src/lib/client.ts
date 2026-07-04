@@ -45,10 +45,12 @@ export function useUsage(sel: TimeSelection, host?: string) {
   });
 }
 
-export function useEvents() {
-  return useSWR("/api/events", (u: string) => fetchValidated(u, EventsResponse), {
-    refreshInterval: 15_000,
-  });
+export function useEvents(limit = 50) {
+  return useSWR(
+    `/api/events?limit=${limit}`,
+    (u: string) => fetchValidated(u, EventsResponse),
+    { refreshInterval: 15_000 },
+  );
 }
 
 export function useUsers(sel: TimeSelection) {

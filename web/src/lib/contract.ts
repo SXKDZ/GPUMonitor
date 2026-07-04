@@ -147,6 +147,7 @@ export type UsageResponse = z.infer<typeof UsageResponse>;
 export const EventsResponse = z.object({
   generatedAt: z.number(),
   events: z.array(KillEvent),
+  total: z.number(), // total events available across all hosts
 });
 export type EventsResponse = z.infer<typeof EventsResponse>;
 

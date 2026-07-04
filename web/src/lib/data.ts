@@ -284,17 +284,23 @@ export function buildUserUsage(records: UserHourly[]): UserUsage[] {
     .sort((a, b) => b.gpu_hours - a.gpu_hours);
 }
 
-/** Most recent kill/would-kill events across all hosts, newest first. */
-export async function readEvents(limit = 200): Promise<KillEvent[]> {
+/** Most recent kill/would-kill events across all hosts, newest first.
+ * Returns the newest `limit` events plus the total available (for "load more").
+ * We parse only the tail of each host's log (bounded by `limit`) but count all
+ * lines so the total is accurate without parsing everything. */
+export async function readEvents(
+  limit = 50,
+): Promise<{ events: KillEvent[]; total: number }> {
   const files = (await listFiles(EVENTS_DIR)).filter((f) => f.endsWith(".jsonl"));
   const events: KillEvent[] = [];
+  let total = 0;
   await Promise.all(
     files.map(async (f) => {
       const raw = await readFileT(path.join(EVENTS_DIR, f));
       if (raw === null) return;
-      // only parse the tail; event logs can grow unbounded
-      const lines = raw.split("\n").filter((l) => l.trim()).slice(-limit);
-      for (const line of lines) {
+      const lines = raw.split("\n").filter((l) => l.trim());
+      total += lines.length;
+      for (const line of lines.slice(-limit)) {
         try {
           const ev = KillEvent.safeParse(JSON.parse(line));
           if (ev.success) events.push(ev.data);
@@ -304,7 +310,10 @@ export async function readEvents(limit = 200): Promise<KillEvent[]> {
       }
     }),
   );
-  return events.sort((a, b) => b.ts - a.ts).slice(0, limit);
+  return {
+    events: events.sort((a, b) => b.ts - a.ts).slice(0, limit),
+    total,
+  };
 }
 
 // ---- range resolution + aggregation -------------------------------------

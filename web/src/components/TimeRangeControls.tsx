@@ -98,15 +98,16 @@ export function TimeRangeControls({
   const to = value.kind === "range" ? value.to : now;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+    <div className="flex flex-wrap items-stretch gap-x-3 gap-y-2">
       <TabBar
+        className="h-10"
         value={value.kind === "preset" ? value.bucket : "__custom__"}
         onValueChange={(b) => onChange({ kind: "preset", bucket: b as Bucket })}
         options={BUCKETS.map((b) => ({ value: b, label: presetLabels[b] }))}
       />
       <div
         className={cn(
-          "flex flex-wrap items-center gap-1.5 rounded-lg border px-2 py-1",
+          "flex h-10 items-center gap-1.5 rounded-lg border px-2",
           value.kind === "range"
             ? "border-primary/50 bg-primary/10"
             : "border-border bg-muted/40",
