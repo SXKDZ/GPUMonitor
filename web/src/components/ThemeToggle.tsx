@@ -1,10 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 type Theme = "light" | "dark" | "system";
-const ORDER: Theme[] = ["system", "light", "dark"];
 
 function apply(theme: Theme) {
   const dark =
@@ -34,31 +32,27 @@ export function ThemeToggle() {
     return () => mq.removeEventListener("change", onChange);
   }, [theme]);
 
-  function cycle() {
-    const next = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length];
+  function choose(next: Theme) {
     setTheme(next);
     localStorage.setItem("theme", next);
     apply(next);
   }
 
   const Icon = theme === "system" ? Monitor : theme === "dark" ? Moon : Sun;
-  const label = theme[0].toUpperCase() + theme.slice(1);
 
   return (
-    <button
-      type="button"
-      onClick={cycle}
-      title={`Theme: ${label} (click to change)`}
-      aria-label={`Theme: ${label}`}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-md border border-border",
-        "bg-muted/40 px-2.5 py-1.5 text-xs font-medium text-muted-foreground",
-        "transition-colors hover:text-foreground",
-      )}
-    >
-      {/* Render icon only after mount to avoid a hydration mismatch. */}
+    <label className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1 text-xs font-medium text-muted-foreground">
       {mounted ? <Icon className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
-      <span className="hidden sm:inline">{mounted ? label : "System"}</span>
-    </button>
+      <select
+        value={mounted ? theme : "system"}
+        onChange={(e) => choose(e.target.value as Theme)}
+        aria-label="Theme"
+        className="bg-transparent text-foreground outline-none [color-scheme:light] dark:[color-scheme:dark]"
+      >
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
   );
 }

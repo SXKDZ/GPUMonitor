@@ -7,6 +7,7 @@ import {
   UsersResponse,
   type Bucket,
 } from "./contract";
+import { useRefreshMs } from "./refresh";
 
 /** Fetch + validate against the shared contract on the client too. */
 async function fetchValidated<T>(
@@ -31,34 +32,38 @@ function timeParams(sel: TimeSelection): string {
 }
 
 export function useOverview() {
+  const refreshInterval = useRefreshMs();
   return useSWR(
     "/api/overview",
     (u: string) => fetchValidated(u, OverviewResponse),
-    { refreshInterval: 10_000 },
+    { refreshInterval },
   );
 }
 
 export function useUsage(sel: TimeSelection, host?: string) {
+  const refreshInterval = useRefreshMs();
   const q = timeParams(sel) + (host ? `&host=${host}` : "");
   return useSWR(`/api/usage?${q}`, (u: string) => fetchValidated(u, UsageResponse), {
-    refreshInterval: 60_000,
+    refreshInterval,
   });
 }
 
 export function useEvents(limit = 50, sel?: TimeSelection) {
-  // Only a custom range filters events by time; presets show the newest N.
-  const rangeQ = sel && sel.kind === "range" ? `&${timeParams(sel)}` : "";
+  const refreshInterval = useRefreshMs();
+  // Presets and custom ranges both resolve to a time window server-side.
+  const timeQ = sel ? `&${timeParams(sel)}` : "";
   return useSWR(
-    `/api/events?limit=${limit}${rangeQ}`,
+    `/api/events?limit=${limit}${timeQ}`,
     (u: string) => fetchValidated(u, EventsResponse),
-    { refreshInterval: 15_000 },
+    { refreshInterval },
   );
 }
 
 export function useUsers(sel: TimeSelection) {
+  const refreshInterval = useRefreshMs();
   return useSWR(
     `/api/users?${timeParams(sel)}`,
     (u: string) => fetchValidated(u, UsersResponse),
-    { refreshInterval: 60_000 },
+    { refreshInterval },
   );
 }

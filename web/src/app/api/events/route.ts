@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readEvents, nowSec } from "@/lib/data";
-import { EventsResponse } from "@/lib/contract";
+import { readEvents, resolveRange, nowSec } from "@/lib/data";
+import { Bucket, EventsResponse } from "@/lib/contract";
 
 export const dynamic = "force-dynamic";
 
@@ -15,14 +15,15 @@ export async function GET(req: NextRequest) {
   const rawLimit = Number(sp.get("limit"));
   const limit = Number.isFinite(rawLimit) ? Math.min(5000, Math.max(1, rawLimit)) : 50;
 
-  const from = epoch(sp.get("from"));
-  const to = epoch(sp.get("to"));
-  const range =
-    from != null || to != null
-      ? { from: from ?? 0, to: to ?? nowSec() }
-      : undefined;
+  // A preset (bucket) or an explicit from/to both resolve to a time window,
+  // exactly like the usage/users views, so event presets filter by window.
+  const range = resolveRange({
+    bucket: Bucket.catch("weekly").parse(sp.get("bucket") ?? "weekly"),
+    from: epoch(sp.get("from")),
+    to: epoch(sp.get("to")),
+  });
 
-  const { events, total } = await readEvents(limit, range);
+  const { events, total } = await readEvents(limit, { from: range.from, to: range.to });
   const body = EventsResponse.parse({ generatedAt: nowSec(), events, total });
   return NextResponse.json(body);
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { RefreshProvider } from "@/lib/refresh";
 
 export const metadata: Metadata = {
   title: process.env.NEXT_PUBLIC_TITLE || "GPUMonitor",
@@ -30,7 +31,9 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <RefreshProvider>{children}</RefreshProvider>
+      </body>
     </html>
   );
 }

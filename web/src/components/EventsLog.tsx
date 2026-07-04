@@ -9,24 +9,22 @@ import { TimeRangeControls } from "@/components/TimeRangeControls";
 
 const PAGE = 50;
 
-// For events the presets just mean "newest N"; only a custom range filters by
-// time, so give the presets event-count labels.
+// Event presets are time windows (same buckets as the other panels).
 const BUCKET_LABELS: Record<Bucket, string> = {
-  hourly: "Latest",
-  weekly: "Latest",
-  biweekly: "Latest",
-  monthly: "Latest",
+  hourly: "48h",
+  weekly: "Weekly",
+  biweekly: "Biweekly",
+  monthly: "Monthly",
 };
 
 export function EventsLog() {
-  const [time, setTime] = useState<TimeSelection>({ kind: "preset", bucket: "hourly" });
+  const [time, setTime] = useState<TimeSelection>({ kind: "preset", bucket: "weekly" });
   const [limit, setLimit] = useState(PAGE);
   const { data } = useEvents(limit, time);
   const earliest = useOverview().data?.earliest ?? null;
   const events = data?.events ?? [];
   const total = data?.total ?? 0;
   const hasMore = events.length < total;
-  const ranged = time.kind === "range";
 
   return (
     <Card>
@@ -35,8 +33,7 @@ export function EventsLog() {
           Guard actions
           {total > 0 && (
             <span className="text-xs font-normal text-muted-foreground">
-              showing {events.length} of {total}
-              {ranged ? " in range" : ""}
+              showing {events.length} of {total} in range
             </span>
           )}
         </CardTitle>
@@ -50,9 +47,7 @@ export function EventsLog() {
       <CardContent>
         {events.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {ranged
-              ? "No kills or would-kills in this range."
-              : "No kills or would-kills recorded yet."}
+            No kills or would-kills in this range.
           </p>
         ) : (
           <>

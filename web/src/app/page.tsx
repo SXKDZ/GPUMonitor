@@ -1,13 +1,42 @@
 "use client";
-import { Github } from "lucide-react";
+import { useState } from "react";
+import { Check, Github } from "lucide-react";
 import { useOverview } from "@/lib/client";
 import { HostGrid } from "@/components/HostGrid";
 import { AccumulatedUsage } from "@/components/AccumulatedUsage";
 import { UserStats } from "@/components/UserStats";
 import { EventsLog } from "@/components/EventsLog";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { RefreshControl } from "@/components/RefreshControl";
 import { Card, CardContent } from "@/components/ui/card";
-import { fmtBytesMiB } from "@/lib/utils";
+import { cn, fmtBytesMiB } from "@/lib/utils";
+
+function HostPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+        active
+          ? "border-primary/50 bg-primary/15 text-primary"
+          : "border-border bg-muted/40 text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {active && <Check className="h-3 w-3" />}
+      {children}
+    </button>
+  );
+}
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -25,6 +54,11 @@ export default function Page() {
   const { data } = useOverview();
   const hosts = data?.hosts ?? [];
   const now = data?.generatedAt ?? Math.floor(Date.now() / 1000);
+
+  const [hostSel, setHostSel] = useState<Set<string>>(new Set());
+  const hostNames = hosts.map((h) => h.host);
+  const shownHosts =
+    hostSel.size === 0 ? hosts : hosts.filter((h) => hostSel.has(h.host));
 
   const allGpus = hosts.flatMap((h) => h.gpus);
   const totalGpus = allGpus.length;
@@ -52,10 +86,9 @@ export default function Page() {
             Live GPU utilization &amp; memory · idle-guard reclaims stalled GPUs
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-            {hosts.length} hosts · auto-refresh 10s
-          </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">{hosts.length} hosts</span>
+          <RefreshControl />
           <ThemeToggle />
         </div>
       </header>
@@ -77,8 +110,36 @@ export default function Page() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Live status</h2>
-        <HostGrid hosts={hosts} stale={data?.stale ?? []} now={now} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Live status</h2>
+          {hostNames.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <HostPill
+                active={hostSel.size === 0}
+                onClick={() => setHostSel(new Set())}
+              >
+                All
+              </HostPill>
+              {hostNames.map((h) => (
+                <HostPill
+                  key={h}
+                  active={hostSel.has(h)}
+                  onClick={() =>
+                    setHostSel((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(h)) next.delete(h);
+                      else next.add(h);
+                      return next;
+                    })
+                  }
+                >
+                  {h}
+                </HostPill>
+              ))}
+            </div>
+          )}
+        </div>
+        <HostGrid hosts={shownHosts} stale={data?.stale ?? []} now={now} />
       </section>
 
       <AccumulatedUsage />
@@ -88,10 +149,6 @@ export default function Page() {
       <EventsLog />
 
       <footer className="flex flex-col items-center gap-2 pt-4 text-center text-xs text-muted-foreground">
-        <span>
-          GPUMonitor · samples every 10s · flags a GPU when &gt;75% of a 5-min
-          window is idle (util ≤5%)
-        </span>
         <a
           href="https://github.com/SXKDZ/GPUMonitor"
           target="_blank"
