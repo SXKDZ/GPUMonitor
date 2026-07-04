@@ -50,7 +50,7 @@ export function UsageChart({ series }: { series: UsageSeries }) {
 
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <ComposedChart data={data} margin={{ top: 8, right: 4, left: -12, bottom: 0 }}>
+      <ComposedChart data={data} margin={{ top: 14, right: 8, left: 4, bottom: 0 }}>
         <defs>
           <linearGradient id="gUtil" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="hsl(199 89% 58%)" stopOpacity={0.5} />
@@ -71,7 +71,7 @@ export function UsageChart({ series }: { series: UsageSeries }) {
           tick={{ fontSize: 11, fill: dark ? "hsl(199 80% 65%)" : "hsl(199 80% 38%)" }}
           stroke={axis}
           unit="%"
-          width={44}
+          width={52}
         />
         <YAxis
           yAxisId="mem"
@@ -80,7 +80,7 @@ export function UsageChart({ series }: { series: UsageSeries }) {
           tick={{ fontSize: 11, fill: dark ? "hsl(280 70% 72%)" : "hsl(280 55% 48%)" }}
           stroke={axis}
           unit=" GB"
-          width={52}
+          width={60}
         />
         <Tooltip
           contentStyle={{
