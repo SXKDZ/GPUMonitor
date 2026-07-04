@@ -111,3 +111,30 @@ export function fromDateTimeInput(value: string): number | null {
   const off = tzOffsetSec(asUtc);
   return Math.floor(asUtc - off);
 }
+
+/** Reassemble wall-clock fields (in the display tz) into epoch seconds. */
+function composeEpoch(date: string, hour24: number, minute: number): number | null {
+  const m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const [, y, mo, d] = m.map(Number);
+  const asUtc = Date.UTC(y, mo - 1, d, hour24, minute) / 1000;
+  return Math.floor(asUtc - tzOffsetSec(asUtc));
+}
+
+/** 12-hour clock components of an instant, in the display tz. */
+export type ClockParts = { date: string; hour12: number; minute: number; ampm: "AM" | "PM" };
+
+export function toClockParts(epochSec: number): ClockParts {
+  const f = partsInTz(epochSec);
+  const p = (n: number) => String(n).padStart(2, "0");
+  const ampm: "AM" | "PM" = f.h >= 12 ? "PM" : "AM";
+  const hour12 = f.h % 12 === 0 ? 12 : f.h % 12;
+  return { date: `${f.y}-${p(f.mo)}-${p(f.d)}`, hour12, minute: f.mi, ampm };
+}
+
+/** Build epoch seconds from 12-hour clock components (in the display tz). */
+export function fromClockParts(c: ClockParts): number | null {
+  let h24 = c.hour12 % 12;
+  if (c.ampm === "PM") h24 += 12;
+  return composeEpoch(c.date, h24, c.minute);
+}

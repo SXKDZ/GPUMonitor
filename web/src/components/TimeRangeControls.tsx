@@ -4,17 +4,85 @@ import { type TimeSelection } from "@/lib/client";
 import { TabBar } from "@/components/ui/tabs";
 import {
   cn,
-  toDateTimeInput,
-  fromDateTimeInput,
+  toClockParts,
+  fromClockParts,
   nowSecClient,
   tzLabel,
+  type ClockParts,
 } from "@/lib/utils";
 
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 1); // 1..12
+const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5); // 0,5,..,55
+
+const selectCls =
+  "rounded bg-transparent text-xs text-foreground outline-none " +
+  "[color-scheme:light] dark:[color-scheme:dark]";
+
+/** A 12-hour date + hour:minute + AM/PM picker for one endpoint. */
+function DateTime12({
+  epoch,
+  max,
+  onChange,
+}: {
+  epoch: number;
+  max: number;
+  onChange: (epoch: number) => void;
+}) {
+  const c = toClockParts(epoch);
+  const commit = (next: Partial<ClockParts>) => {
+    const e = fromClockParts({ ...c, ...next });
+    if (e != null) onChange(e);
+  };
+  const maxDate = toClockParts(max).date;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input
+        type="date"
+        value={c.date}
+        max={maxDate}
+        onChange={(e) => commit({ date: e.target.value })}
+        className={selectCls}
+      />
+      <select
+        value={c.hour12}
+        onChange={(e) => commit({ hour12: Number(e.target.value) })}
+        className={selectCls}
+      >
+        {HOURS.map((h) => (
+          <option key={h} value={h}>
+            {h}
+          </option>
+        ))}
+      </select>
+      <span className="text-muted-foreground">:</span>
+      <select
+        value={c.minute}
+        onChange={(e) => commit({ minute: Number(e.target.value) })}
+        className={selectCls}
+      >
+        {MINUTES.map((m) => (
+          <option key={m} value={m}>
+            {String(m).padStart(2, "0")}
+          </option>
+        ))}
+      </select>
+      <select
+        value={c.ampm}
+        onChange={(e) => commit({ ampm: e.target.value as "AM" | "PM" })}
+        className={selectCls}
+      >
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+    </span>
+  );
+}
+
 /**
- * Preset buttons (Hourly/Weekly/…) plus a custom From/To datetime range with
- * a 5-minute step. Picking a preset clears the custom range; editing either
- * datetime switches to range mode. Controlled via a single `TimeSelection`.
- * All times are shown in the display timezone (see DISPLAY_TZ / tzLabel).
+ * Preset buttons (Hourly/Weekly/…) plus a custom From/To range using a 12-hour
+ * AM/PM picker with 5-minute steps. Picking a preset clears the custom range;
+ * editing either endpoint switches to range mode. All times are shown in the
+ * display timezone (see DISPLAY_TZ / tzLabel).
  */
 export function TimeRangeControls({
   value,
@@ -28,23 +96,6 @@ export function TimeRangeControls({
   const now = nowSecClient();
   const from = value.kind === "range" ? value.from : now - 7 * 86400;
   const to = value.kind === "range" ? value.to : now;
-
-  function setFrom(v: string) {
-    const f = fromDateTimeInput(v);
-    if (f == null) return;
-    onChange({ kind: "range", from: f, to: value.kind === "range" ? value.to : now });
-  }
-  function setTo(v: string) {
-    const t = fromDateTimeInput(v);
-    if (t == null) return;
-    onChange({
-      kind: "range",
-      from: value.kind === "range" ? value.from : now - 7 * 86400,
-      to: t,
-    });
-  }
-
-  const STEP = 300; // 5-minute step
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -64,25 +115,18 @@ export function TimeRangeControls({
         <span className="text-xs uppercase tracking-wide text-muted-foreground">
           From
         </span>
-        <input
-          type="datetime-local"
-          step={STEP}
-          value={toDateTimeInput(from)}
-          max={toDateTimeInput(to)}
-          onChange={(e) => setFrom(e.target.value)}
-          className="rounded bg-transparent text-xs text-foreground outline-none [color-scheme:light] dark:[color-scheme:dark]"
+        <DateTime12
+          epoch={from}
+          max={to}
+          onChange={(f) => onChange({ kind: "range", from: f, to })}
         />
         <span className="text-xs uppercase tracking-wide text-muted-foreground">
           To
         </span>
-        <input
-          type="datetime-local"
-          step={STEP}
-          value={toDateTimeInput(to)}
-          min={toDateTimeInput(from)}
-          max={toDateTimeInput(now)}
-          onChange={(e) => setTo(e.target.value)}
-          className="rounded bg-transparent text-xs text-foreground outline-none [color-scheme:light] dark:[color-scheme:dark]"
+        <DateTime12
+          epoch={to}
+          max={now}
+          onChange={(t) => onChange({ kind: "range", from, to: t })}
         />
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
           {tzLabel()}
