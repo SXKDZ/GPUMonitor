@@ -1,11 +1,11 @@
 "use client";
 import { useMemo, useState } from "react";
-import { useUsage } from "@/lib/client";
-import { BUCKETS, type Bucket } from "@/lib/contract";
+import { useUsage, type TimeSelection } from "@/lib/client";
+import { type Bucket } from "@/lib/contract";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TabBar } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { UsageChart } from "@/components/UsageChart";
+import { TimeRangeControls } from "@/components/TimeRangeControls";
 
 const BUCKET_LABELS: Record<Bucket, string> = {
   hourly: "Hourly",
@@ -42,11 +42,11 @@ function PillToggle({
 }
 
 export function AccumulatedUsage() {
-  const [bucket, setBucket] = useState<Bucket>("hourly");
+  const [time, setTime] = useState<TimeSelection>({ kind: "preset", bucket: "hourly" });
   // Empty set = "all". Multi-select: toggling adds/removes from the set.
   const [hostSel, setHostSel] = useState<Set<string>>(new Set());
   const [gpuSel, setGpuSel] = useState<Set<string>>(new Set());
-  const { data, isLoading } = useUsage(bucket);
+  const { data, isLoading } = useUsage(time);
 
   const series = data?.series ?? [];
   const cluster = series.find((s) => s.scope === "cluster");
@@ -84,11 +84,7 @@ export function AccumulatedUsage() {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Accumulated usage · per GPU</h2>
-        <TabBar
-          value={bucket}
-          onValueChange={setBucket}
-          options={BUCKETS.map((b) => ({ value: b, label: BUCKET_LABELS[b] }))}
-        />
+        <TimeRangeControls value={time} onChange={setTime} presetLabels={BUCKET_LABELS} />
       </div>
 
       {cluster && (
@@ -177,7 +173,7 @@ export function AccumulatedUsage() {
       </div>
 
       {isLoading && series.length === 0 && (
-        <p className="text-sm text-muted-foreground">Loading {bucket} aggregates…</p>
+        <p className="text-sm text-muted-foreground">Loading aggregates…</p>
       )}
     </section>
   );

@@ -111,11 +111,12 @@ export const SeriesPoint = z.object({
 });
 export type SeriesPoint = z.infer<typeof SeriesPoint>;
 
-/** Aggregated usage for a scope (a host, a GPU, or the whole cluster). */
+/** Aggregated usage for a scope (a host, a GPU, or the whole cluster).
+ * `granularity` is a tick-formatting hint: "hourly" | "daily" | "weekly" | "monthly". */
 export const UsageSeries = z.object({
   scope: z.string(), // "cluster" | host | "host/gpuN"
   label: z.string(),
-  bucket: Bucket,
+  granularity: z.string(),
   points: z.array(SeriesPoint),
 });
 export type UsageSeries = z.infer<typeof UsageSeries>;
@@ -128,9 +129,17 @@ export const OverviewResponse = z.object({
 });
 export type OverviewResponse = z.infer<typeof OverviewResponse>;
 
+/** The resolved time range + chosen granularity for a query. */
+export const RangeInfo = z.object({
+  from: z.number(), // epoch seconds (UTC)
+  to: z.number(),
+  granularity: z.string(), // "hourly" | "daily" | "weekly" | "monthly"
+});
+export type RangeInfo = z.infer<typeof RangeInfo>;
+
 export const UsageResponse = z.object({
   generatedAt: z.number(),
-  bucket: Bucket,
+  range: RangeInfo,
   series: z.array(UsageSeries),
 });
 export type UsageResponse = z.infer<typeof UsageResponse>;
@@ -179,7 +188,7 @@ export type UserUsage = z.infer<typeof UserUsage>;
 
 export const UsersResponse = z.object({
   generatedAt: z.number(),
-  bucket: Bucket,
+  range: RangeInfo,
   users: z.array(UserUsage),
 });
 export type UsersResponse = z.infer<typeof UsersResponse>;

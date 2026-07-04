@@ -83,12 +83,16 @@ export async function readAllStatus(): Promise<LiveStatus[]> {
 }
 
 /**
- * Read hourly rollup records across all hosts within [sinceSec, now].
+ * Read hourly rollup records across all hosts within [fromSec, toSec].
  * Only opens month files that can overlap the range -- keeps IO bounded.
  */
-export async function readRollups(sinceSec: number): Promise<HourlyRecord[]> {
+export async function readRollups(
+  fromSec: number,
+  toSec: number = nowSec(),
+): Promise<HourlyRecord[]> {
   const hosts = await listFiles(ROLLUP_DIR);
-  const wantedMonths = monthsInRange(sinceSec, nowSec());
+  const wantedMonths = monthsInRange(fromSec, toSec);
+  const inRange = (h: number) => h >= fromSec && h <= toSec;
   const records: HourlyRecord[] = [];
   await Promise.all(
     hosts.map(async (host) => {
@@ -104,7 +108,7 @@ export async function readRollups(sinceSec: number): Promise<HourlyRecord[]> {
             if (!line.trim()) continue;
             try {
               const rec = HourlyRecord.safeParse(JSON.parse(line));
-              if (rec.success && rec.data.hour >= sinceSec) records.push(rec.data);
+              if (rec.success && inRange(rec.data.hour)) records.push(rec.data);
             } catch {
               /* skip malformed line */
             }
@@ -114,7 +118,7 @@ export async function readRollups(sinceSec: number): Promise<HourlyRecord[]> {
       // Fold in the in-progress hour (not yet flushed to a month file) so the
       // hourly view shows data immediately instead of waiting up to an hour.
       for (const rec of await readCurrentHour(host)) {
-        if (rec.hour >= sinceSec) records.push(rec);
+        if (inRange(rec.hour)) records.push(rec);
       }
     }),
   );
@@ -164,9 +168,13 @@ async function readCurrentHour(host: string): Promise<HourlyRecord[]> {
 }
 
 /** Read per-user hourly rollups (finalized `<month>.users.jsonl` + in-progress). */
-export async function readUserRollups(sinceSec: number): Promise<UserHourly[]> {
+export async function readUserRollups(
+  fromSec: number,
+  toSec: number = nowSec(),
+): Promise<UserHourly[]> {
   const hosts = await listFiles(ROLLUP_DIR);
-  const wantedMonths = monthsInRange(sinceSec, nowSec());
+  const wantedMonths = monthsInRange(fromSec, toSec);
+  const inRange = (h: number) => h >= fromSec && h <= toSec;
   const records: UserHourly[] = [];
   await Promise.all(
     hosts.map(async (host) => {
@@ -184,7 +192,7 @@ export async function readUserRollups(sinceSec: number): Promise<UserHourly[]> {
             if (!line.trim()) continue;
             try {
               const rec = UserHourly.safeParse(JSON.parse(line));
-              if (rec.success && rec.data.hour >= sinceSec) records.push(rec.data);
+              if (rec.success && inRange(rec.data.hour)) records.push(rec.data);
             } catch {
               /* skip malformed line */
             }
@@ -192,7 +200,7 @@ export async function readUserRollups(sinceSec: number): Promise<UserHourly[]> {
         }),
       );
       for (const rec of await readCurrentUsers(host)) {
-        if (rec.hour >= sinceSec) records.push(rec);
+        if (inRange(rec.hour)) records.push(rec);
       }
     }),
   );
@@ -299,34 +307,81 @@ export async function readEvents(limit = 200): Promise<KillEvent[]> {
   return events.sort((a, b) => b.ts - a.ts).slice(0, limit);
 }
 
-// ---- aggregation --------------------------------------------------------
+// ---- range resolution + aggregation -------------------------------------
 
 export function nowSec(): number {
   return Math.floor(Date.now() / 1000);
 }
 
-const BUCKET_SECONDS: Record<Bucket, number> = {
-  hourly: 3600,
-  weekly: 7 * 86400,
-  biweekly: 14 * 86400,
-  monthly: 30 * 86400,
+const HOUR = 3600;
+const DAY = 86400;
+
+/** A resolved query range: absolute [from,to] plus the aggregation bucket. */
+export type ResolvedRange = {
+  from: number;
+  to: number;
+  bucketSeconds: number;
+  granularity: string; // tick-format hint: hourly | daily | weekly | monthly
 };
 
-/** How far back each view looks. Hourly => last 48h of hourly points, etc. */
-const BUCKET_WINDOW_SECONDS: Record<Bucket, number> = {
-  hourly: 48 * 3600,
-  weekly: 12 * 7 * 86400,
-  biweekly: 26 * 14 * 86400,
-  monthly: 12 * 30 * 86400,
+/** How far back each preset looks. */
+const PRESET_WINDOW_SECONDS: Record<Bucket, number> = {
+  hourly: 48 * HOUR,
+  weekly: 12 * 7 * DAY,
+  biweekly: 26 * 14 * DAY,
+  monthly: 12 * 30 * DAY,
+};
+const PRESET_BUCKET_SECONDS: Record<Bucket, number> = {
+  hourly: HOUR,
+  weekly: 7 * DAY,
+  biweekly: 14 * DAY,
+  monthly: 30 * DAY,
+};
+const PRESET_GRANULARITY: Record<Bucket, string> = {
+  hourly: "hourly",
+  weekly: "weekly",
+  biweekly: "weekly",
+  monthly: "monthly",
 };
 
-export function bucketWindowStart(bucket: Bucket): number {
-  return nowSec() - BUCKET_WINDOW_SECONDS[bucket];
+/** Pick a sensible bucket + tick granularity for an arbitrary span. */
+function pickGranularity(spanSec: number): { bucketSeconds: number; granularity: string } {
+  if (spanSec <= 3 * DAY) return { bucketSeconds: HOUR, granularity: "hourly" };
+  if (spanSec <= 45 * DAY) return { bucketSeconds: DAY, granularity: "daily" };
+  if (spanSec <= 300 * DAY) return { bucketSeconds: 7 * DAY, granularity: "weekly" };
+  return { bucketSeconds: 30 * DAY, granularity: "monthly" };
 }
 
-function bucketStart(hour: number, bucket: Bucket): number {
-  const size = BUCKET_SECONDS[bucket];
-  return hour - (hour % size);
+/**
+ * Resolve a query into an absolute range + bucket. Precedence:
+ *   - explicit from/to (either bound optional) => custom range, auto granularity
+ *   - otherwise the named preset (default "hourly")
+ */
+export function resolveRange(opts: {
+  bucket?: Bucket;
+  from?: number;
+  to?: number;
+}): ResolvedRange {
+  const now = nowSec();
+  if (opts.from != null || opts.to != null) {
+    const to = opts.to != null ? opts.to : now;
+    const from = opts.from != null ? opts.from : to - 7 * DAY;
+    const lo = Math.min(from, to);
+    const hi = Math.max(from, to);
+    const { bucketSeconds, granularity } = pickGranularity(Math.max(HOUR, hi - lo));
+    return { from: lo, to: hi, bucketSeconds, granularity };
+  }
+  const b: Bucket = opts.bucket ?? "hourly";
+  return {
+    from: now - PRESET_WINDOW_SECONDS[b],
+    to: now,
+    bucketSeconds: PRESET_BUCKET_SECONDS[b],
+    granularity: PRESET_GRANULARITY[b],
+  };
+}
+
+function bucketStart(hour: number, bucketSeconds: number): number {
+  return hour - (hour % bucketSeconds);
 }
 
 /**
@@ -334,7 +389,7 @@ function bucketStart(hour: number, bucket: Bucket): number {
  * Sample-weighted means so partial hours don't skew the average. Both
  * utilization AND memory are aggregated (mean + max).
  */
-function aggregate(records: HourlyRecord[], bucket: Bucket): SeriesPoint[] {
+function aggregate(records: HourlyRecord[], bucketSeconds: number): SeriesPoint[] {
   const byBucket = new Map<
     number,
     {
@@ -347,7 +402,7 @@ function aggregate(records: HourlyRecord[], bucket: Bucket): SeriesPoint[] {
     }
   >();
   for (const r of records) {
-    const b = bucketStart(r.hour, bucket);
+    const b = bucketStart(r.hour, bucketSeconds);
     const cur =
       byBucket.get(b) ??
       { util_w: 0, util_max: 0, mem_w: 0, mem_pct_w: 0, mem_total: 0, samples: 0 };
@@ -390,17 +445,18 @@ function round(n: number, d: number): number {
  */
 export function buildSeries(
   records: HourlyRecord[],
-  bucket: Bucket,
+  range: ResolvedRange,
   onlyHost?: string,
 ): UsageSeries[] {
+  const { bucketSeconds, granularity } = range;
   const recs = onlyHost ? records.filter((r) => r.host === onlyHost) : records;
   const series: UsageSeries[] = [];
   if (!onlyHost) {
     series.push({
       scope: "cluster",
       label: "Whole cluster",
-      bucket,
-      points: aggregate(records, bucket),
+      granularity,
+      points: aggregate(records, bucketSeconds),
     });
   }
   // group by (host, gpu index)
@@ -421,8 +477,8 @@ export function buildSeries(
     series.push({
       scope: key,
       label: `${g.host} · GPU ${g.index} (${g.name.replace("NVIDIA ", "")})`,
-      bucket,
-      points: aggregate(g.recs, bucket),
+      granularity,
+      points: aggregate(g.recs, bucketSeconds),
     });
   }
   return series;

@@ -60,7 +60,7 @@ export function UsageChart({ series }: { series: UsageSeries }) {
         <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
         <XAxis
           dataKey="t"
-          tickFormatter={(t) => fmtBucketTick(t, series.bucket)}
+          tickFormatter={(t) => fmtBucketTick(t, series.granularity)}
           tick={{ fontSize: 11, fill: tickMuted }}
           minTickGap={28}
           stroke={axis}
@@ -89,7 +89,7 @@ export function UsageChart({ series }: { series: UsageSeries }) {
             borderRadius: 8,
             fontSize: 12,
           }}
-          labelFormatter={(t) => fmtBucketTick(Number(t), series.bucket)}
+          labelFormatter={(t) => fmtBucketTick(Number(t), series.granularity)}
           formatter={(v: number, n) =>
             n === "Utilization (mean)" ? [`${v}%`, n] : [`${v} GB`, n]
           }

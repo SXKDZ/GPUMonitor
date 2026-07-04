@@ -1,12 +1,12 @@
 "use client";
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { useUsers } from "@/lib/client";
-import { BUCKETS, type Bucket, type UserUsage } from "@/lib/contract";
+import { useUsers, type TimeSelection } from "@/lib/client";
+import { type Bucket, type UserUsage } from "@/lib/contract";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TabBar } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { TimeRangeControls } from "@/components/TimeRangeControls";
 
 const BUCKET_LABELS: Record<Bucket, string> = {
   hourly: "Last 48h",
@@ -95,8 +95,8 @@ function UserRow({ u, maxGpuHours }: { u: UserUsage; maxGpuHours: number }) {
 }
 
 export function UserStats() {
-  const [bucket, setBucket] = useState<Bucket>("weekly");
-  const { data, isLoading } = useUsers(bucket);
+  const [time, setTime] = useState<TimeSelection>({ kind: "preset", bucket: "weekly" });
+  const { data, isLoading } = useUsers(time);
   const users = data?.users ?? [];
   const maxGpuHours = Math.max(1, ...users.map((u) => u.gpu_hours));
 
@@ -104,17 +104,13 @@ export function UserStats() {
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Per-user usage</h2>
-        <TabBar
-          value={bucket}
-          onValueChange={setBucket}
-          options={BUCKETS.map((b) => ({ value: b, label: BUCKET_LABELS[b] }))}
-        />
+        <TimeRangeControls value={time} onChange={setTime} presetLabels={BUCKET_LABELS} />
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            GPU-hours &amp; memory by user · {BUCKET_LABELS[bucket]} · click a row for detail
+            GPU-hours &amp; memory by user · click a row for detail
           </CardTitle>
         </CardHeader>
         <CardContent>

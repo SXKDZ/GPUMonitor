@@ -18,6 +18,18 @@ async function fetchValidated<T>(
   return schema.parse(await res.json());
 }
 
+/** A time selection is either a named preset or a custom [from,to] range
+ * (epoch seconds, UTC). */
+export type TimeSelection =
+  | { kind: "preset"; bucket: Bucket }
+  | { kind: "range"; from: number; to: number };
+
+/** Turn a selection into query params (stable key ordering for SWR caching). */
+function timeParams(sel: TimeSelection): string {
+  if (sel.kind === "preset") return `bucket=${sel.bucket}`;
+  return `from=${sel.from}&to=${sel.to}`;
+}
+
 export function useOverview() {
   return useSWR(
     "/api/overview",
@@ -26,24 +38,22 @@ export function useOverview() {
   );
 }
 
-export function useUsage(bucket: Bucket, host?: string) {
-  const key = host
-    ? `/api/usage?bucket=${bucket}&host=${host}`
-    : `/api/usage?bucket=${bucket}`;
-  return useSWR(key, (u) => fetchValidated(u, UsageResponse), {
+export function useUsage(sel: TimeSelection, host?: string) {
+  const q = timeParams(sel) + (host ? `&host=${host}` : "");
+  return useSWR(`/api/usage?${q}`, (u: string) => fetchValidated(u, UsageResponse), {
     refreshInterval: 60_000,
   });
 }
 
 export function useEvents() {
-  return useSWR("/api/events", (u) => fetchValidated(u, EventsResponse), {
+  return useSWR("/api/events", (u: string) => fetchValidated(u, EventsResponse), {
     refreshInterval: 15_000,
   });
 }
 
-export function useUsers(bucket: Bucket) {
+export function useUsers(sel: TimeSelection) {
   return useSWR(
-    `/api/users?bucket=${bucket}`,
+    `/api/users?${timeParams(sel)}`,
     (u: string) => fetchValidated(u, UsersResponse),
     { refreshInterval: 60_000 },
   );
