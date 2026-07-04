@@ -1,0 +1,6 @@
+{
+  "enforce": false,
+  "protected_users": [
+    "root"
+  ]
+}

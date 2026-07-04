@@ -1,0 +1,21 @@
+[Unit]
+Description=GPUMonitor dashboard (Next.js) - cluster GPU usage web UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@BASE@/web
+EnvironmentFile=@BASE@/config.env
+Environment=NODE_ENV=production
+# Absolute path to the node toolchain (systemd units have no login shell).
+Environment=PATH=@NODE_BIN@:/usr/local/bin:/usr/bin:/bin
+ExecStart=@NODE_BIN@/npx next start -H 0.0.0.0 -p @PORT@
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

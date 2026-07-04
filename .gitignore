@@ -1,0 +1,25 @@
+# Local config (copy from config.env.example)
+config.env
+
+# Runtime data & logs (written under GPUGUARD_BASE at runtime)
+data/
+logs/
+*.pid
+*.log
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+web/.env.local
+web/*.pid
+web/*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# OS / editor
+.DS_Store
+._*
+*.swp

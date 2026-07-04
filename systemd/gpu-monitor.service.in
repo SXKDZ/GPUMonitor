@@ -1,0 +1,20 @@
+[Unit]
+Description=GPUMonitor - sample GPU util/memory, publish stats, flag stalled GPUs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Unprivileged: the monitor only reads nvidia-smi and writes data files.
+User=@USER@
+EnvironmentFile=@BASE@/config.env
+Environment=TZ=UTC
+ExecStart=/usr/bin/python3 @BASE@/bin/gpu_monitor.py
+Restart=always
+RestartSec=5
+Nice=-5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

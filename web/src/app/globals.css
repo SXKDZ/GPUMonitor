@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --radius: 0.6rem;
+  /* Light palette (default). */
+  --background: 210 40% 98%;
+  --foreground: 222 30% 12%;
+  --card: 0 0% 100%;
+  --muted: 214 25% 92%;
+  --muted-foreground: 215 16% 42%;
+  --border: 214 22% 86%;
+  --primary: 199 89% 42%;
+  --accent: 199 89% 42%;
+}
+
+.dark {
+  /* Dark, control-room palette. */
+  --background: 222 24% 8%;
+  --foreground: 210 20% 92%;
+  --card: 222 20% 11%;
+  --muted: 220 16% 18%;
+  --muted-foreground: 215 15% 60%;
+  --border: 220 16% 20%;
+  --primary: 199 89% 58%;
+  --accent: 199 89% 58%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}

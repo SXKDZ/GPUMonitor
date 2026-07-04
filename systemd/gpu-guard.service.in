@@ -1,0 +1,22 @@
+[Unit]
+Description=GPUGuard - kill processes on GPUs flagged as stalled by GPUMonitor
+After=network-online.target gpu-monitor.service
+Wants=network-online.target
+Wants=gpu-monitor.service
+
+[Service]
+Type=simple
+# Runs as root so it can terminate any user's compute processes.
+User=root
+EnvironmentFile=@BASE@/config.env
+Environment=TZ=UTC
+ExecStart=/usr/bin/python3 @BASE@/bin/gpu_guard.py
+Restart=always
+RestartSec=5
+# The killer must never be OOM-reaped before the jobs it polices.
+OOMScoreAdjust=-500
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
