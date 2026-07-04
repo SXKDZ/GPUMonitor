@@ -1,4 +1,5 @@
 "use client";
+import { memo } from "react";
 import {
   Area,
   ComposedChart,
@@ -18,8 +19,24 @@ import { useIsDark } from "@/lib/useIsDark";
  * Dual-axis chart for one aggregated series:
  *   left  y-axis: mean utilization (%), 0-100
  *   right y-axis: mean memory used (GB), 0..GPU capacity
+ *
+ * Memoized on (scope, last point time, dark): with ~40 charts on screen and a
+ * periodic refetch, this avoids re-rendering every chart when the data is
+ * unchanged, which was the main source of dashboard jank.
  */
-export function UsageChart({ series }: { series: UsageSeries }) {
+export const UsageChart = memo(UsageChartImpl, (a, b) => {
+  const pa = a.series.points;
+  const pb = b.series.points;
+  return (
+    a.series.scope === b.series.scope &&
+    pa.length === pb.length &&
+    pa[pa.length - 1]?.t === pb[pb.length - 1]?.t &&
+    pa[pa.length - 1]?.util_mean === pb[pb.length - 1]?.util_mean &&
+    pa[pa.length - 1]?.mem_used_gb_mean === pb[pb.length - 1]?.mem_used_gb_mean
+  );
+});
+
+function UsageChartImpl({ series }: { series: UsageSeries }) {
   const dark = useIsDark();
   // Neutral chrome adapts to theme; the util (blue) / mem (purple) data colors
   // read well on both backgrounds.
@@ -103,6 +120,7 @@ export function UsageChart({ series }: { series: UsageSeries }) {
           stroke="hsl(199 89% 58%)"
           fill="url(#gUtil)"
           strokeWidth={2}
+          isAnimationActive={false}
         />
         <Line
           yAxisId="mem"
@@ -112,6 +130,7 @@ export function UsageChart({ series }: { series: UsageSeries }) {
           stroke="hsl(280 70% 68%)"
           strokeWidth={2}
           dot={false}
+          isAnimationActive={false}
         />
       </ComposedChart>
     </ResponsiveContainer>

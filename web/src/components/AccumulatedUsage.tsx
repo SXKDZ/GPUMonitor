@@ -69,12 +69,15 @@ export function AccumulatedUsage() {
     [gpuSeries, hostSel],
   );
 
-  // Which GPU panels to render: the GPU selection intersected with visible
-  // GPUs; empty GPU selection = show all visible.
-  const shown = useMemo(
-    () => (gpuSel.size === 0 ? hostGpus : hostGpus.filter((s) => gpuSel.has(s.scope))),
-    [hostGpus, gpuSel],
-  );
+  // Which GPU panels to render. Rendering all ~39 GPU charts at once is heavy,
+  // so by default (no host/GPU selected) we show none and let the cluster chart
+  // stand in; selecting hosts and/or GPUs reveals just those. Selecting a host
+  // (without picking GPUs) shows that host's GPUs.
+  const shown = useMemo(() => {
+    if (gpuSel.size > 0) return hostGpus.filter((s) => gpuSel.has(s.scope));
+    if (hostSel.size > 0) return hostGpus; // host chosen -> show its GPUs
+    return []; // nothing selected -> cluster chart only
+  }, [hostGpus, gpuSel, hostSel]);
 
   function toggle(set: Set<string>, key: string): Set<string> {
     const next = new Set(set);
@@ -170,18 +173,25 @@ export function AccumulatedUsage() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-        {shown.map((s) => (
-          <Card key={s.scope}>
-            <CardHeader>
-              <CardTitle className="text-sm">{s.label}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <UsageChart series={s} />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {shown.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+          {shown.map((s) => (
+            <Card key={s.scope}>
+              <CardHeader>
+                <CardTitle className="text-sm">{s.label}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <UsageChart series={s} />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Showing the whole-cluster chart above. Pick a host or GPU to break it
+          down per GPU.
+        </p>
+      )}
 
       {isLoading && series.length === 0 && (
         <p className="text-sm text-muted-foreground">Loading aggregates…</p>

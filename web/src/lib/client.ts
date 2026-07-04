@@ -40,11 +40,22 @@ export function useOverview() {
   );
 }
 
+// Rollup-backed views (usage/users) only change when an hour finalizes, so
+// poll them no more often than this regardless of the live-status interval.
+// This keeps the 40 accumulated-usage charts from re-fetching every 10s.
+const ROLLUP_MIN_REFRESH_MS = 300_000; // 5 min
+
+/** Live interval, but floored (0 = paused stays paused). */
+function slowRefresh(ms: number): number {
+  return ms === 0 ? 0 : Math.max(ms, ROLLUP_MIN_REFRESH_MS);
+}
+
 export function useUsage(sel: TimeSelection, host?: string) {
-  const refreshInterval = useRefreshMs();
+  const refreshInterval = slowRefresh(useRefreshMs());
   const q = timeParams(sel) + (host ? `&host=${host}` : "");
   return useSWR(`/api/usage?${q}`, (u: string) => fetchValidated(u, UsageResponse), {
     refreshInterval,
+    keepPreviousData: true,
   });
 }
 
@@ -55,15 +66,15 @@ export function useEvents(limit = 50, sel?: TimeSelection) {
   return useSWR(
     `/api/events?limit=${limit}${timeQ}`,
     (u: string) => fetchValidated(u, EventsResponse),
-    { refreshInterval },
+    { refreshInterval, keepPreviousData: true },
   );
 }
 
 export function useUsers(sel: TimeSelection) {
-  const refreshInterval = useRefreshMs();
+  const refreshInterval = slowRefresh(useRefreshMs());
   return useSWR(
     `/api/users?${timeParams(sel)}`,
     (u: string) => fetchValidated(u, UsersResponse),
-    { refreshInterval },
+    { refreshInterval, keepPreviousData: true },
   );
 }
