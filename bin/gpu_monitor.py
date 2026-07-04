@@ -278,6 +278,9 @@ class Rollup:
                     ua = {"user": user, "gpu_samples": 0, "util_samples": 0,
                           "util_sum": 0.0, "mem_sum": 0.0, "mem_max": 0}
                     self.users[user] = ua
+                # Backfill keys that may be absent from a current.json written by
+                # an older version, so resume never KeyErrors on a new field.
+                ua.setdefault("util_samples", 0)
                 ua["gpu_samples"] += 1  # one (gpu, sample) of occupancy
                 if u is not None:
                     ua["util_sum"] += u
