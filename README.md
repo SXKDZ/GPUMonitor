@@ -137,6 +137,13 @@ sudo ./uninstall.sh [monitor|guard|dashboard|prune]
 Enforcement is **central**: `ctl.sh enforce on` edits `config.json` once and
 every guard picks it up within one poll cycle. Guards start in **dry-run**.
 
+**Repair.** If a crash-loop ever double-finalizes hours or writes an impossible
+value, `bin/repair_rollups.py` rewrites the finalized rollup files, de-duplicating
+`(hour, gpu|user)` (keeping the most-sampled record) and dropping records with
+`util_mean > 100`. It leaves the in-progress hour and live status untouched and
+is idempotent (`python3 bin/repair_rollups.py [--dry-run]`). The dashboard also
+clamps utilization to 0–100% defensively.
+
 **Data retention.** Rollups and event logs accumulate over time. `prune_data.py`
 deletes finalized monthly rollups whose whole month is older than
 `GPUGUARD_RETENTION_DAYS` (default 30) and trims events older than the cutoff;

@@ -309,7 +309,7 @@ export function buildUserUsage(records: UserHourly[]): UserUsage[] {
   }
   const fmt = (a: Acc) => ({
     gpu_hours: round(a.gpu_hours, 2),
-    util_mean: round(a.util_w / (a.gpu_samples || 1), 1),
+    util_mean: clampPct(round(a.util_w / (a.gpu_samples || 1), 1)),
     mem_gib_hours: round(a.mem_gib_hours, 2),
     mem_used_max_gib: round(a.mem_max_mib / 1024, 1),
   });
@@ -489,8 +489,8 @@ function aggregate(records: HourlyRecord[], bucketSeconds: number): SeriesPoint[
       const memMib = v.mem_w / s;
       return {
         t,
-        util_mean: round(v.util_w / s, 2),
-        util_max: round(v.util_max, 1),
+        util_mean: clampPct(round(v.util_w / s, 2)),
+        util_max: clampPct(round(v.util_max, 1)),
         mem_pct_mean: round(v.mem_pct_w / s, 2),
         mem_used_mean: round(memMib, 1),
         mem_used_gb_mean: round(memMib / 1024, 2),
@@ -503,6 +503,12 @@ function aggregate(records: HourlyRecord[], bucketSeconds: number): SeriesPoint[
 function round(n: number, d: number): number {
   const p = 10 ** d;
   return Math.round(n * p) / p;
+}
+
+/** Utilization is physically 0-100%; clamp so a stray corrupt record can never
+ * render an impossible value. */
+function clampPct(n: number): number {
+  return Math.max(0, Math.min(100, n));
 }
 
 /**
