@@ -15,29 +15,37 @@ const BUCKET_LABELS: Record<Bucket, string> = {
   monthly: "Monthly",
 };
 
-/** A toggle pill for host / GPU multi-selection. */
-function PillToggle({
-  active,
+/** A checkbox pill: a tick box + label. Checked shows a filled tick. */
+function CheckPill({
+  checked,
   onClick,
   children,
 }: {
-  active: boolean;
+  checked: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
+      role="checkbox"
+      aria-checked={checked}
       onClick={onClick}
-      aria-pressed={active}
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
-        active
+        "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+        checked
           ? "border-primary/50 bg-primary/15 text-primary"
           : "border-border bg-muted/40 text-muted-foreground hover:text-foreground",
       )}
     >
-      {active && <Check className="h-3 w-3" />}
+      <span
+        className={cn(
+          "flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border",
+          checked ? "border-primary bg-primary text-white" : "border-muted-foreground/50",
+        )}
+      >
+        {checked && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+      </span>
       {children}
     </button>
   );
@@ -69,15 +77,13 @@ export function AccumulatedUsage() {
     [gpuSeries, hostSel],
   );
 
-  // Which GPU panels to render. Rendering all ~39 GPU charts at once is heavy,
-  // so by default (no host/GPU selected) we show none and let the cluster chart
-  // stand in; selecting hosts and/or GPUs reveals just those. Selecting a host
-  // (without picking GPUs) shows that host's GPUs.
-  const shown = useMemo(() => {
-    if (gpuSel.size > 0) return hostGpus.filter((s) => gpuSel.has(s.scope));
-    if (hostSel.size > 0) return hostGpus; // host chosen -> show its GPUs
-    return []; // nothing selected -> cluster chart only
-  }, [hostGpus, gpuSel, hostSel]);
+  // The ticked GPUs are the ones charted below (a host tick just narrows which
+  // GPU checkboxes are offered). None ticked -> only the cluster chart shows;
+  // "Select all" ticks every visible GPU. Nothing is ever forbidden.
+  const shown = useMemo(
+    () => hostGpus.filter((s) => gpuSel.has(s.scope)),
+    [hostGpus, gpuSel],
+  );
 
   function toggle(set: Set<string>, key: string): Set<string> {
     const next = new Set(set);
@@ -114,24 +120,15 @@ export function AccumulatedUsage() {
         </Card>
       )}
 
-      {/* host multi-select (drops GPU selections that leave the visible set) */}
+      {/* host checkboxes — tick to filter which GPUs are listed below */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="mr-1 text-xs uppercase tracking-wide text-muted-foreground">
           Host
         </span>
-        <PillToggle
-          active={hostSel.size === 0}
-          onClick={() => {
-            setHostSel(new Set());
-            setGpuSel(new Set());
-          }}
-        >
-          All hosts
-        </PillToggle>
         {hosts.map((h) => (
-          <PillToggle
+          <CheckPill
             key={h}
-            active={hostSel.has(h)}
+            checked={hostSel.has(h)}
             onClick={() => {
               const next = toggle(hostSel, h);
               setHostSel(next);
@@ -147,33 +144,43 @@ export function AccumulatedUsage() {
             }}
           >
             {h}
-          </PillToggle>
+          </CheckPill>
         ))}
       </div>
 
-      {/* GPU multi-select */}
+      {/* GPU checkboxes — ticked GPUs are charted below */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="mr-1 text-xs uppercase tracking-wide text-muted-foreground">
           GPU
         </span>
-        <PillToggle active={gpuSel.size === 0} onClick={() => setGpuSel(new Set())}>
-          All
-        </PillToggle>
         {hostGpus.map((s) => {
           const [h, g] = s.scope.split("/");
           return (
-            <PillToggle
+            <CheckPill
               key={s.scope}
-              active={gpuSel.has(s.scope)}
+              checked={gpuSel.has(s.scope)}
               onClick={() => setGpuSel((prev) => toggle(prev, s.scope))}
             >
               {hostSel.size === 1 ? g : `${h}·${g}`}
-            </PillToggle>
+            </CheckPill>
           );
         })}
+        <button
+          type="button"
+          onClick={() =>
+            setGpuSel(
+              gpuSel.size === hostGpus.length
+                ? new Set()
+                : new Set(hostGpus.map((s) => s.scope)),
+            )
+          }
+          className="ml-1 text-xs text-primary hover:underline"
+        >
+          {gpuSel.size === hostGpus.length ? "Clear" : "Select all"}
+        </button>
       </div>
 
-      {shown.length > 0 ? (
+      {shown.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
           {shown.map((s) => (
             <Card key={s.scope}>
@@ -186,11 +193,6 @@ export function AccumulatedUsage() {
             </Card>
           ))}
         </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Showing the whole-cluster chart above. Pick a host or GPU to break it
-          down per GPU.
-        </p>
       )}
 
       {isLoading && series.length === 0 && (
